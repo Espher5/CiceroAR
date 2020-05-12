@@ -1,7 +1,0 @@
-{
-  "name": "GuideMeAR",
-  "integrations": {
-    "cordova": {}
-  },
-  "type": "angular"
-}
