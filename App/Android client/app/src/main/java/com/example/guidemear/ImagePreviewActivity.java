@@ -11,13 +11,18 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import com.example.guidemear.network.UploadAPI;
+import com.example.guidemear.network.UploadHandler;
 
-import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
+
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
 
 
 public class ImagePreviewActivity extends AppCompatActivity {
@@ -36,10 +41,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
         Button uploadButton = findViewById(R.id.upload_button);
         uploadButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                //uploadImage(imagePath);
-
-                Intent intent1 = new Intent(getApplicationContext(), ArActivity.class);
-                startActivity(intent1);
+                uploadImage(imagePath);
             }
         });
 
@@ -55,76 +57,26 @@ public class ImagePreviewActivity extends AppCompatActivity {
     }
 
 
+    private void uploadImage(String imagePath) {
+        File file = new File(imagePath);
 
-    /**
-     *
-     */
-    private void uploadImage(String sourceFileUri) {
-        String uploadServerUri = "http://192.168.43.6:8080/upload";
+        RequestBody requestBody = RequestBody.create(MediaType.parse("image/*"), file);
+        MultipartBody.Part part = MultipartBody.Part.createFormData("image", file.getName(), requestBody);
 
-        HttpURLConnection httpURLConnection;
-        DataOutputStream dataOutputStream;
-        String lineEnd = "\r\n";
-        String twoHyphens = "--";
-        String boundary = "*****";
-        int bytesRead, bytesAvaliable, bufferSize;
-        byte[] buffer;
-        int maxBufferSize = 1024 * 1024;
+        Retrofit retrofit = UploadHandler.getRetrofit();
+        UploadAPI uploadAPI = retrofit.create(UploadAPI.class);
+        Call call = uploadAPI.uploadImage(part);
+        call.enqueue(new Callback() {
+            @Override
+            public void onResponse(Call call, Response response) {
 
-        File sourceFile = new File(sourceFileUri);
-        if(!sourceFile.isFile()) {
-            Toast.makeText(this, "Source file does not exist", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        try {
-            FileInputStream fileInputStream = new FileInputStream(sourceFile);
-            URL url = new URL(uploadServerUri);
-
-            httpURLConnection = (HttpURLConnection) url.openConnection();
-            httpURLConnection.setDoInput(true);
-            httpURLConnection.setDoOutput(true);
-            httpURLConnection.setUseCaches(false);
-            httpURLConnection.setRequestMethod("POST");
-            httpURLConnection.setRequestProperty("Connection", "Kepp-Alive");
-            httpURLConnection.setRequestProperty("ENCTYPE", "multipart/form-data");
-            httpURLConnection.setRequestProperty("Content-Type", "multipart/form-data;");
-            httpURLConnection.setRequestProperty("image", sourceFileUri);
-
-            dataOutputStream = new DataOutputStream(httpURLConnection.getOutputStream());
-            dataOutputStream.writeBytes(twoHyphens + boundary + lineEnd);
-            dataOutputStream.writeBytes("Content-Disposition: form-data;name=image;filename=" + sourceFileUri + lineEnd);
-            dataOutputStream.writeBytes(lineEnd);
-
-            bytesAvaliable = fileInputStream.available();
-            bufferSize = Math.min(bytesAvaliable, maxBufferSize);
-            buffer = new byte[bufferSize];
-            bytesRead = fileInputStream.read(buffer, 0, bufferSize);
-
-            while(bytesRead > 0) {
-                dataOutputStream.write(buffer, 0, bufferSize);
-                bytesAvaliable = fileInputStream.available();
-                bufferSize = Math.min(bytesAvaliable, maxBufferSize);
-                bytesRead = fileInputStream.read(buffer, 0, bufferSize);
             }
 
-            dataOutputStream.writeBytes(lineEnd);
-            dataOutputStream.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd);
-
-            //Server response here
-
-            fileInputStream.close();
-            dataOutputStream.flush();
-            dataOutputStream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-
-    /**
-     *
-     */
-    private void redirectResponse() {
-
+            @Override
+            public void onFailure(Call call, Throwable t) {
+                t.printStackTrace();
+                Toast.makeText(getApplicationContext(), "Error! No response from server", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 }
