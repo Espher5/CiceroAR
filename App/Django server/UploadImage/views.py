@@ -16,7 +16,7 @@ class ImageUploadView(APIView):
 
         if image_serializer.is_valid():
             image_serializer.save()
-            image_detector = ImageDetector('La-nascita-di-Venere-Botticelli.jpg')
+            image_detector = ImageDetector('media.jpg')
             confidence = image_detector.process_image()
             print(confidence)
 
