@@ -28,14 +28,14 @@ app.get('/', function(req,res){
   
 
 /**
- * Post request handle
+ * Post request handler
  * Stores the image in the temporary storage, forwards it to the
  * REST API and deletes the image
  */
 app.post('/upload', upload.single('image'), (req, res) => {  
     var fs = require('fs');
     var request = require('request');
-    var filename = './uploads/' + req.file.filename
+    var filename = './uploads/' + req.file.filename;
 
 
     /*
@@ -54,12 +54,18 @@ app.post('/upload', upload.single('image'), (req, res) => {
 
 
     /*
-    * Forwards the image to the REST API and sends the response 
-    * body back to the Android client
+    * Forwards the image to the REST API, sends the json response 
+    * body back to the Android client and deletes the image
     */
+    console.log('Sending request to REST API...');
     request(options, function(err, APIresponse, body) {
         if(err) throw err;
-        res.send(body);
+        res.json({
+            'artist': 'Sandro Botticelli',
+            'title': JSON.parse(body).title,
+            'description': 'blablabla'
+        });
+
         fs.unlink(filename, (err) => {
             if(err) throw err;
         });
