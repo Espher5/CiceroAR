@@ -1,4 +1,4 @@
-package com.example.guidemear;
+package com.example.guidemear.activities;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -12,22 +12,24 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
-import android.view.View;
+import android.util.Log;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.Toast;
+
+import com.example.guidemear.R;
 
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+
 public class ImageSelectionActivity extends AppCompatActivity {
+    private static final String TAG = "ImageSelectionActivity";
     private static final int CAMERA_PERMISSION_CODE = 101;
     private static final int CAMERA_REQUEST_CODE = 102;
     private String currentPhotoPath;
@@ -37,20 +39,16 @@ public class ImageSelectionActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_image_selection);
 
+
+        /*
+         Creates
+         */
         Button cameraButton = findViewById(R.id.camera_button);
-        cameraButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                askCameraPermission();
-            }
-        });
+        cameraButton.setOnClickListener(v -> askCameraPermission());
 
         Button galleryButton = findViewById(R.id.gallery_button);
-        galleryButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
+        galleryButton.setOnClickListener(v -> {
 
-            }
         });
     }
 
@@ -80,7 +78,7 @@ public class ImageSelectionActivity extends AppCompatActivity {
 
 
     /**
-     *
+     * Launches the camera
      */
     private void dispatchTakePictureIntent() {
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -89,7 +87,7 @@ public class ImageSelectionActivity extends AppCompatActivity {
             try {
                 imageFile = createImageFile();
             } catch(IOException e) {
-                e.printStackTrace();
+                Log.e(TAG, "Error creating the image file: " + e);
             }
 
             if(imageFile != null) {
@@ -102,9 +100,10 @@ public class ImageSelectionActivity extends AppCompatActivity {
 
 
     /**
-     *
+     * Creates a new file for the captured image
      */
     private File createImageFile() throws IOException {
+        @SuppressLint("SimpleDateFormat")
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         String imageFileName = "JPEG_" + timeStamp + "_";
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
@@ -118,11 +117,17 @@ public class ImageSelectionActivity extends AppCompatActivity {
     }
 
 
-    @SuppressLint("MissingSuperCall")
+    /**
+     * Method called after selecting an image to process
+     *
+     * @param requestCode the camera request code
+     * @param resultCode the camera result code
+     * @param data the data contained in the intent
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
         if(requestCode == CAMERA_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-
             Intent intent = new Intent(getApplicationContext(), ImagePreviewActivity.class);
             intent.putExtra("image_path", currentPhotoPath);
             startActivity(intent);
