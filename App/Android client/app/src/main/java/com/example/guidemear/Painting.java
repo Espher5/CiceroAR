@@ -1,18 +1,19 @@
 package com.example.guidemear;
 
 import java.io.Serializable;
+import java.util.Map;
 
 public class Painting implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String artist;
     private String title;
-    private String description;
+    private Map<String, String> paintingInfo;
 
-    public Painting(String artist, String title, String description) {
+    public Painting(String artist, String title, Map<String, String> paintingInfo) {
         this.artist = artist;
         this.title = title;
-        this.description = description;
+        this.paintingInfo = paintingInfo;
     }
 
     public String getArtist() {
@@ -31,11 +32,11 @@ public class Painting implements Serializable {
         this.title = title;
     }
 
-    public String getDescription() {
-        return description;
+    public Map<String, String> getPaintingInfo() {
+        return paintingInfo;
     }
 
-    public void setDescription(String description) {
-        this.description = description;
+    public void setPaintingInfo(Map<String, String> paintingInfo) {
+        this.paintingInfo = paintingInfo;
     }
 }
