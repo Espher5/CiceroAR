@@ -29,8 +29,8 @@ import retrofit2.Retrofit;
 
 
 /**
- * Activity for displaying the selected image and allowing the user to
- * upload it or cancel
+ * Activity responsible for displaying the captured image and allowing the user to
+ * upload it or cancel the operation
  */
 public class ImagePreviewActivity extends AppCompatActivity {
     private static final String TAG = "ImagePreviewActivity";
@@ -40,6 +40,8 @@ public class ImagePreviewActivity extends AppCompatActivity {
      * Retrieves the path of the selected image from the intent,
      * creates a preview to display in the UI and
      * adds the listeners for the upload and cancel buttons
+     *
+     * @param savedInstanceState the previous activity state
      */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,7 +64,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
         Button cancelButton = findViewById(R.id.cancel_button);
         cancelButton.setOnClickListener(v -> {
-            Intent intent1 = new Intent(getApplicationContext(), ImageSelectionActivity.class);
+            Intent intent1 = new Intent(getApplicationContext(), MainActivity.class);
             startActivity(intent1);
         });
     }
@@ -92,7 +94,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
                     Painting painting = new Painting(
                             response.body().getArtist(),
                             response.body().getTitle(),
-                            response.body().getDescription()
+                            null
                     );
                     Intent intent = new Intent(getApplicationContext(), ArActivity.class);
                     intent.putExtra("painting", painting);
