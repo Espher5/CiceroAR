@@ -1,4 +1,4 @@
-# Thesis
+# CiceroAR: Image Recognition and Augmented Reality for painting narration
 
 When visiting a museum or an art gallery, inspecting a painting is an activity limited to a quick visual analysis and, in some cases, to a small description found on a plate; for the most part, the history behind a piece and some of its details get lost and forgotten. A guide can help enhancing the discovering experience, however guided tours are not always available, as in the case of small private galleries, or they often provide long routes to which the visitor may not be interested in.
 
