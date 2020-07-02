@@ -1,5 +1,6 @@
 package com.example.guidemear.painting;
 
+
 import java.io.Serializable;
 import java.util.List;
 
@@ -8,12 +9,12 @@ public class Painting implements Serializable {
 
     private String artist;
     private String title;
-    private List<PaintingDetail> paintingInfo;
+    private List<PaintingDetail> paintingDetails;
 
     public Painting(String artist, String title, List<PaintingDetail> paintingInfo) {
         this.artist = artist;
         this.title = title;
-        this.paintingInfo = paintingInfo;
+        this.paintingDetails = paintingInfo;
     }
 
     public String getArtist() {
@@ -32,11 +33,11 @@ public class Painting implements Serializable {
         this.title = title;
     }
 
-    public List<PaintingDetail> getPaintingInfo() {
-        return paintingInfo;
+    public List<PaintingDetail> getPaintingDetails() {
+        return paintingDetails;
     }
 
-    public void setPaintingInfo(List<PaintingDetail> paintingInfo) {
-        this.paintingInfo = paintingInfo;
+    public void setPaintingDetails(List<PaintingDetail> paintingInfo) {
+        this.paintingDetails = paintingInfo;
     }
 }

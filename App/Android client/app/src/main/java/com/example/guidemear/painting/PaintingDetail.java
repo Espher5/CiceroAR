@@ -13,7 +13,15 @@ public class PaintingDetail {
         return imagePath;
     }
 
+    public void setImagePath(String imagePath) {
+        this.imagePath = imagePath;
+    }
+
     public String getDescription() {
         return description;
+    }
+
+    public String toString() {
+        return "Path: " + imagePath + " Desc: " + description;
     }
 }
