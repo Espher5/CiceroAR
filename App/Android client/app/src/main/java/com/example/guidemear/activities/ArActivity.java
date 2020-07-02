@@ -4,6 +4,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.animation.ObjectAnimator;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
@@ -13,6 +14,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 import android.widget.Button;
@@ -21,8 +23,7 @@ import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.example.guidemear.CustomArFragment;
-import com.example.guidemear.painting.Painting;
-import com.example.guidemear.painting.PaintingDetail;
+import com.example.guidemear.network.SingletonAsyncDownloadTask;
 import com.example.guidemear.R;
 import com.example.guidemear.texttospeech.CustomUtteranceProgressListener;
 import com.example.guidemear.texttospeech.TextToSpeechManager;
@@ -31,6 +32,8 @@ import com.google.ar.core.AugmentedImage;
 import com.google.ar.core.AugmentedImageDatabase;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
+import com.google.ar.core.HitResult;
+import com.google.ar.core.Plane;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.TrackingState;
@@ -47,16 +50,17 @@ import com.google.ar.sceneform.ux.TransformableNode;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
+import java.util.Objects;
 
 
 public class ArActivity extends AppCompatActivity {
-    private static final String TAG = "ARActivity";
-    private boolean placeGuideFlag = true;
+    private static final String TAG = "Pippo";
+    private boolean detectionFlag = true;
     private boolean playingFlag = false;
-    private Painting painting;
+
+    private String[] descriptions;
+    private Bitmap[] downloadResult;
     private int narrationIndex = 0;
 
     private ImageButton playButton;
@@ -71,53 +75,28 @@ public class ArActivity extends AppCompatActivity {
 
 
     /**
-     * Handler responsible to manage the message sent from the TTS thread when an utterance is started
+     * Handler responsible to manage the message sent from the TTS thread when an utterance is started.
+     * It places the image in the scene and interpolates it between
+     * the position in which it has been generated and a forward point
      */
     private final Handler onTtsStartHandler = new Handler(Looper.getMainLooper()) {
         @Override
         public void handleMessage(@NonNull Message message) {
             Log.d(TAG, "onTtsStartHandler. Message: " + message);
-            String imagePath = message.getData().getString("IMAGE_PATH");
 
+            Pose imagePose = augmentedImage.getCenterPose();
+            Pose targetPose = imagePose.compose(Pose.makeTranslation(0, 0, 0));
+            Anchor anchor = Objects.requireNonNull(arFragment
+                    .getArSceneView()
+                    .getSession())
+                    .createAnchor(targetPose);
 
-            try {
-                /*
-                ** Places the image in the scene and interpolates it between
-                ** the position in which it has been generated and a forward point
-                 */
-
-                Pose imagePose = augmentedImage.getCenterPose();
-                Pose targetPose = imagePose.compose(Pose.makeTranslation(0, 0, 0));
-                Anchor anchor = arFragment
-                        .getArSceneView()
-                        .getSession()
-                        .createAnchor(targetPose);
-                InputStream in = getAssets().open(imagePath + ".jpg");
-                Bitmap bitmap = BitmapFactory.decodeStream(in);
-                placeImageView(arFragment, anchor, bitmap);
-
-                if(imageNode != null) {
-                    AnchorNode targetAnchor = new AnchorNode(arFragment
-                            .getArSceneView()
-                            .getSession()
-                            .createAnchor(imagePose.compose(Pose.makeTranslation(1, 1, 1))));
-
-                    ObjectAnimator objectAnimator = new ObjectAnimator();
-                    objectAnimator.setAutoCancel(true);
-                    objectAnimator.setTarget(imageNode);
-
-                    objectAnimator.setObjectValues(
-                            imageNode.getWorldPosition(),
-                            targetAnchor.getWorldPosition()
-                    );
-                    objectAnimator.setPropertyName("worldPosition");
-                    objectAnimator.setEvaluator(new Vector3Evaluator());
-                    objectAnimator.setInterpolator(new LinearInterpolator());
-                    objectAnimator.setDuration(2000);
-                    objectAnimator.start();
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
+            Log.d(TAG, "MonkaMega");
+            if (downloadResult[narrationIndex] != null) {
+                Log.d(TAG, "Not Null");
+                placeImageView(arFragment, anchor, downloadResult[narrationIndex]);
+            } else {
+                Log.d(TAG, "Null");
             }
         }
     };
@@ -131,26 +110,14 @@ public class ArActivity extends AppCompatActivity {
         public void handleMessage(@NonNull Message message) {
             Log.d(TAG, "onTtsDoneHandler. Message: " + message);
 
-            /*
-            ** Deletes the image node from the scene
-             */
-            if(imageNode != null) {
-                arFragment.getArSceneView().getScene().removeChild(imageNode);
-                imageNode.setParent(null);
-                imageNode = null;
-            }
-
-            if(playingFlag) {
-                ttsManager.stop();
-                narrationIndex++;
-                if(narrationIndex >= painting.getPaintingInfo().size()) {
-                    narrationIndex = painting.getPaintingInfo().size() - 1;
-                }
-                PaintingDetail entry = painting.getPaintingInfo().get(narrationIndex);
-                ttsManager.speak(entry.getDescription(), entry.getImagePath());
-            }
-            else {
-                Log.d(TAG, "Cannot create ImageView, imageNode is null");
+            narrationIndex++;
+            if(narrationIndex >=descriptions.length) {
+                narrationIndex = 0;
+                playingFlag = false;
+                Drawable icon = getDrawable(android.R.drawable.ic_media_play);
+                playButton.setImageDrawable(icon);
+            } else {
+                ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
             }
         }
     };
@@ -171,66 +138,76 @@ public class ArActivity extends AppCompatActivity {
         assert arFragment != null;
         arFragment.getPlaneDiscoveryController().hide();
         arFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
+        arFragment.setOnTapArPlaneListener((HitResult hitResult, Plane plane, MotionEvent motionEvent) -> {
+            Anchor anchor = hitResult.createAnchor();
+            AnchorNode anchorNode = new AnchorNode(anchor);
+            anchorNode.setParent(arFragment.getArSceneView().getScene());
+            placeGuideModel(arFragment, anchor, Uri.parse("female_head.sfb"));
+        });
 
         ttsManager = new TextToSpeechManager();
         CustomUtteranceProgressListener progressListener = new CustomUtteranceProgressListener(onTtsStartHandler, onTtsDoneHandler);
         ttsManager.initTts(getApplicationContext(), progressListener);
 
-        painting = getPainting();
-        List<PaintingDetail> paintingInfo = painting.getPaintingInfo();
+        Intent intent = getIntent();
+        //String artist = intent.getStringExtra("artist");
+        //String title = intent.getStringExtra("title");
+        descriptions = intent.getStringArrayExtra("descriptions");
+
+        downloadResult = SingletonAsyncDownloadTask.getDownloadResult();
+        assert downloadResult != null;
+        assert descriptions!= null;
 
         /*
-        ** UI buttons listeners
-        */
+         * UI buttons listeners
+         */
         playButton = findViewById(R.id.play_pause_button);
         playButton.setVisibility(View.GONE);
         playButton.setOnClickListener(v -> {
             if (!playingFlag) {
                 /*
-                ** TTS is currently paused
-                ** Changes the ImageButton icon to the pause icon and resumes the narration
+                 * TTS is currently paused
+                 * Changes the ImageButton icon to the pause icon and resumes the narration
                  */
                 Drawable icon = getDrawable(android.R.drawable.ic_media_pause);
                 playButton.setImageDrawable(icon);
                 playingFlag = true;
 
-                PaintingDetail entry = paintingInfo.get(narrationIndex);
-                ttsManager.speak(entry.getDescription(), entry.getImagePath());
+                ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
             } else {
                 /*
-                ** TTS is currently playing
-                ** Changes the ImageButton icon to the play icon and stops the narration
+                 * TTS is currently playing
+                 * Changes the ImageButton icon to the play icon and stops the narration
                  */
                 Drawable icon = getDrawable(android.R.drawable.ic_media_play);
                 playButton.setImageDrawable(icon);
                 playingFlag = false;
                 ttsManager.stop();
-
             }
         });
 
         nextButton = findViewById(R.id.next_button);
         nextButton.setVisibility(View.GONE);
         nextButton.setOnClickListener(v -> {
+            narrationIndex++;
+            if(narrationIndex >= descriptions.length) {
+                narrationIndex = descriptions.length - 1;
+            }
+
             if(playingFlag) {
                 ttsManager.stop();
-                narrationIndex++;
-                if(narrationIndex >= paintingInfo.size()) {
-                    narrationIndex = paintingInfo.size() - 1;
-                }
-                PaintingDetail entry = paintingInfo.get(narrationIndex);
-                ttsManager.speak(entry.getDescription(), entry.getImagePath());
+                ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
             }
         });
 
         previousButton = findViewById(R.id.previous_button);
         previousButton.setVisibility(View.GONE);
         previousButton.setOnClickListener(v -> {
+            narrationIndex = (narrationIndex > 0 ? narrationIndex - 1 : 0);
+
             if(playingFlag) {
                 ttsManager.stop();
-                narrationIndex = (narrationIndex > 0 ? narrationIndex - 1 : 0);
-                PaintingDetail entry = paintingInfo.get(narrationIndex);
-                ttsManager.speak(entry.getDescription(), entry.getImagePath());
+                ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
             }
         });
     }
@@ -245,42 +222,24 @@ public class ArActivity extends AppCompatActivity {
      */
     private void onUpdateFrame(FrameTime frameTime) {
         Frame frame = arFragment.getArSceneView().getArFrame();
-        if(frame == null) {
-            return;
-        }
+        assert frame != null;
 
-        Pose cameraPose = frame.getCamera().getPose();
-        /*
-        ** First-time guide setup
-         */
-        if(placeGuideFlag) {
+        if(detectionFlag) {
             Collection<AugmentedImage> augmentedImages = frame.getUpdatedTrackables(AugmentedImage.class);
             augmentedImages.forEach(augmentedImage -> {
                 if(augmentedImage.getTrackingState() == TrackingState.TRACKING &&
                         augmentedImage.getName().equals("Venere")) {
                     this.augmentedImage = augmentedImage;
 
-                    Pose pose = cameraPose.compose(Pose.makeTranslation(2, 0, -0.3f));
-                    Anchor anchor = arFragment.getArSceneView().getSession().createAnchor(pose);
-                    AnchorNode anchorNode = new AnchorNode(anchor);
-                    anchorNode.setParent(arFragment.getArSceneView().getScene());
-                    placeGuideModel(arFragment, anchor, Uri.parse("female_head.sfb"));
-                    placeGuideFlag = false;
+                    detectionFlag = false;
                     enableUI();
                 }
             });
         }
 
         /*
-        ** Updates the guide model and the detail image to face the camera
-        if(guideNode != null) {
-            Vector3 cameraPosition = arFragment.getArSceneView().getScene().getCamera().getWorldPosition();
-            Vector3 guideModelPosition = guideNode.getWorldPosition();
-            Vector3 guideDirection = Vector3.subtract(cameraPosition, guideModelPosition);
-            Quaternion guideLookRotation = Quaternion.lookRotation(guideDirection, Vector3.up());
-            guideNode.setWorldRotation(guideLookRotation);
-         }
-        */
+         * Rotates the image displayed to look the viewer at all times
+         */
         if (imageNode != null) {
             Vector3 cameraPosition = arFragment.getArSceneView().getScene().getCamera().getWorldPosition();
             Vector3 imagePosition = imageNode.getWorldPosition();
@@ -296,6 +255,7 @@ public class ArActivity extends AppCompatActivity {
      */
     private void enableUI() {
         playButton.setVisibility(View.VISIBLE);
+        playButton.setBackground(null);
         nextButton.setVisibility(View.VISIBLE);
         previousButton.setVisibility(View.VISIBLE);
     }
@@ -309,12 +269,17 @@ public class ArActivity extends AppCompatActivity {
      * @param uri uri pointing to the 3D model .sfb file
      */
     private void placeGuideModel(ArFragment arFragment, Anchor anchor, Uri uri) {
+        if(guideNode != null) {
+            arFragment.getArSceneView().getScene().removeChild(guideNode);
+            guideNode.setParent(null);
+            guideNode = null;
+        }
         ModelRenderable.builder()
-                .setSource(arFragment.getContext(), uri)
+                .setSource(Objects.requireNonNull(arFragment.getContext()), uri)
                 .build()
                 .thenAccept(modelRenderable -> {
                     guideNode = addNodeToScene(arFragment, anchor, modelRenderable);
-                    guideNode.setLocalRotation(Quaternion.axisAngle(new Vector3(0.0f, 0.0f, 0.0f), 90f));
+                    //guideNode.setLocalRotation(Quaternion.axisAngle(new Vector3(0.0f, 0.0f, 0.0f), 90f));
                 })
                 .exceptionally(throwable -> {
                     Toast.makeText(getApplicationContext(), "Error: " + throwable.getMessage(), Toast.LENGTH_SHORT).show();
@@ -332,7 +297,11 @@ public class ArActivity extends AppCompatActivity {
      * @param bitmap the bitmap containing the image data
      */
     private void placeImageView(ArFragment arFragment, Anchor anchor, Bitmap bitmap) {
-        Log.d(TAG, "placeImageView called");
+        if(imageNode != null) {
+            arFragment.getArSceneView().getScene().removeChild(imageNode);
+            imageNode.setParent(null);
+            imageNode = null;
+        }
         ViewRenderable.builder()
                 .setView(arFragment.getContext(), R.layout.ar_layout)
                 .build()
@@ -342,7 +311,8 @@ public class ArActivity extends AppCompatActivity {
                     viewRenderable.setShadowCaster(false);
                     viewRenderable.setShadowReceiver(false);
                     imageNode = addNodeToScene(arFragment, anchor, viewRenderable);
-                    imageNode.setLocalRotation(Quaternion.axisAngle(new Vector3(-1f, 0, 0), 90f));
+                    Log.d(TAG, "ImageNode created");
+                    animateImageNode();
                 })
                 .exceptionally(throwable -> {
                     Toast.makeText(getApplicationContext(), "Error generating the image view: " + throwable.getMessage(), Toast.LENGTH_SHORT).show();
@@ -351,15 +321,24 @@ public class ArActivity extends AppCompatActivity {
     }
 
 
-    /**
-     *
-     */
-    private void destroyImageNode() {
-        if(imageNode != null) {
-            arFragment.getArSceneView().getScene().removeChild(imageNode);
-            imageNode.setParent(null);
-            imageNode = null;
-        }
+    private void animateImageNode() {
+        Log.d(TAG, "Animation starting");
+        ObjectAnimator imageAnimator = new ObjectAnimator();
+        imageAnimator.setTarget(imageNode);
+        imageAnimator.setAutoCancel(true);
+
+        Vector3 startPosition = imageNode.getWorldPosition();
+        Vector3 endPosition = new Vector3(startPosition.x + 100, startPosition.y + 100, startPosition.z + 100);
+        imageAnimator.setObjectValues(startPosition, endPosition);
+
+        imageAnimator.setPropertyName("localInterpolation");
+        imageAnimator.setEvaluator(new Vector3Evaluator());
+        imageAnimator.setInterpolator(new LinearInterpolator());
+        imageAnimator.setAutoCancel(true);
+
+        imageAnimator.setDuration(20000);
+        imageAnimator.start();
+        Log.d(TAG, "Animation dome");
     }
 
 
@@ -427,36 +406,5 @@ public class ArActivity extends AppCompatActivity {
             ttsManager.destroyTts();
         }
         super.onDestroy();
-    }
-
-
-    /*
-    ** Test painting setup
-     */
-    private Painting getPainting() {
-        List<PaintingDetail> paintingInfo = new ArrayList<>();
-
-
-        paintingInfo.add(new PaintingDetail ("default", "The main focus of the composition is the goddess of love and beauty, Venus. " +
-                "Born by the sea spray, she is blown on the island of Cyprus by the winds, Zephyr and Aura. " +
-                "She is met by a young woman, sometimes identified as the Hora of Spring, who holds a cloak covered in flowers " +
-                "and is ready to cover her. A detail often overlooked is the lack of shadows in the scene; " +
-                "according to some interpretations, the painting is set in an alternative reality, still very similar to our own."));
-        paintingInfo.add(new PaintingDetail("Venus", "The goddess is standing on a giant scallop shell, as pure and perfect as a pearl. " +
-                "She covers her nakedness with long, blond hair, which has reflections of light from the fact it has been gilded. " +
-                "The fine modelling and white flesh colour gives her the appearance of a statue, an impression fortified by her stance, " +
-                "which is very similar to the Venus Pudica, an ancient statue of the greek-roman period."));
-        paintingInfo.add(new PaintingDetail("Shell", "You may wonder why Venus is standing on a shell; the story goes that the God Uranus had a son named Chronus, " +
-                "who overthrew his father and threw his genitals into the sea; this caused the water to be fertilised, " +
-                "and thus the goddess was born."));
-        paintingInfo.add(new PaintingDetail("Zephyrus", "In the top left of the piece we can notice Zephyrus, god of the winds; " +
-                "he is  holding Aura, personification of a light breeze. The two are highlighting the pale face of the goddess, " +
-                "while blowing the shell towards the coast."));
-        paintingInfo.add(new PaintingDetail("Aura", "The Hora herself may be a complementary version of the nymph Chloris. " +
-                "Are they two versions of the same person then? It might be; the story of this woman is narrated in " +
-                "“I Fasti” by latin author Ovidio and the painted in “The Spring”, by Botticelli himself, " +
-                "where the woman gets kidnapped by Zephyrus to become a mystical figure. The theory is quite farfetched, " +
-                "however there’s a detail in its favour: the roses falling around her and Zephyrus."));
-        return new Painting("Sandro Botticelli", "La nascita di Venere", paintingInfo);
     }
 }
