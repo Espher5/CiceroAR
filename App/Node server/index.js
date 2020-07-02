@@ -2,6 +2,7 @@ const express = require('express');
 const app = express(); 
 const cors = require('cors');
 app.use(cors());
+app.use('/paintings', express.static(__dirname + '/paintings'));
 
 
 /**
@@ -17,14 +18,6 @@ var storage = multer.diskStorage({
     } 
 });         
 var upload = multer({  storage: storage });     
-  
-
-/**
- * Get request handler
- */
-app.get('/', function(req,res){ 
-    res.send('Hello'); 
-}); 
   
 
 /**
@@ -58,13 +51,23 @@ app.post('/upload', upload.single('image'), (req, res) => {
     * body back to the Android client and deletes the image
     */
     console.log('Sending request to REST API...');
-    request(options, function(err, APIresponse, body) {
+    request(options, (err, APIresponse, body) => {
         if(err) throw err;
-        res.json({
-            'artist': 'Sandro Botticelli',
-            'title': JSON.parse(body).title,
-            'description': 'blablabla'
-        });
+        var json = JSON.parse(body);
+        var title = json.title;
+
+        if(title != null) {
+            const MongoClient  = require('mongodb').MongoClient;
+            const dbUrl = 'mongodb://localhost:27017/';
+            MongoClient.connect(dbUrl, { useUnifiedTopology: true }, (err, db) => {
+                var dbo = db.db('PaintingsInfo')
+                dbo.collection('Paintings').findOne({ title: title}, (err, result) => {
+                    if(err) throw err;
+                    db.close;
+                    res.json(result);
+                });
+            });
+        }
 
         fs.unlink(filename, (err) => {
             if(err) throw err;
