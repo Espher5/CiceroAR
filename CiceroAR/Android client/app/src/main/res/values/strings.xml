@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">GuideMeAR</string>
+    <string name="start_button">Get Started</string>
+    <string name="help_button">Help</string>
+    <string name="camera_button">Camera</string>
+    <string name="gallery_button">Gallery</string>
+    <string name="upload_button">Upload</string>
+    <string name="cancel_button">Cancel</string>
+</resources>
