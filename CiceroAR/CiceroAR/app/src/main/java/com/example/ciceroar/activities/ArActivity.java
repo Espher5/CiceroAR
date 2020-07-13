@@ -1,4 +1,4 @@
-package com.example.ciceroar.activities;
+package com.example.guidemear.activities;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -14,6 +14,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
@@ -22,11 +23,11 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.Toast;
 
-import com.example.ciceroar.CustomArFragment;
-import com.example.ciceroar.network.SingletonAsyncDownloadTask;
-import com.example.ciceroar.R;
-import com.example.ciceroar.texttospeech.CustomUtteranceProgressListener;
-import com.example.ciceroar.texttospeech.TextToSpeechManager;
+import com.example.guidemear.CustomArFragment;
+import com.example.guidemear.network.SingletonAsyncDownloadTask;
+import com.example.guidemear.R;
+import com.example.guidemear.texttospeech.CustomUtteranceProgressListener;
+import com.example.guidemear.texttospeech.TextToSpeechManager;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.AugmentedImage;
 import com.google.ar.core.AugmentedImageDatabase;
@@ -39,6 +40,7 @@ import com.google.ar.core.Session;
 import com.google.ar.core.TrackingState;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.FrameTime;
+import com.google.ar.sceneform.Node;
 import com.google.ar.sceneform.math.Quaternion;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.math.Vector3Evaluator;
@@ -69,11 +71,13 @@ public class ArActivity extends AppCompatActivity {
 
     private ArFragment arFragment;
     private AugmentedImage augmentedImage;
-    private TransformableNode guideNode;
-    private TransformableNode imageNode;
+    private Node guideNode;
+    ModelRenderable guideRenderable;
+    private Node imageNode;
+    private ViewRenderable imageRenderable;
     private TextToSpeechManager ttsManager;
 
-
+    private AnchorNode startNode, endNode;
     /**
      * Handler responsible to manage the message sent from the TTS thread when an utterance is started.
      * It places the image in the scene and interpolates it between
@@ -85,11 +89,10 @@ public class ArActivity extends AppCompatActivity {
             Log.d(TAG, "onTtsStartHandler. Message: " + message);
 
             Pose imagePose = augmentedImage.getCenterPose();
-            Pose targetPose = imagePose.compose(Pose.makeTranslation(0, 0, 0));
             Anchor anchor = Objects.requireNonNull(arFragment
                     .getArSceneView()
                     .getSession())
-                    .createAnchor(targetPose);
+                    .createAnchor(imagePose);
 
             if (downloadResult[narrationIndex] != null) {
                 placeImageView(arFragment, anchor, downloadResult[narrationIndex]);
@@ -151,9 +154,8 @@ public class ArActivity extends AppCompatActivity {
         downloadResult = SingletonAsyncDownloadTask.getDownloadResult();
         assert downloadResult != null;
 
-        /*
-         * UI buttons listeners
-         */
+
+        // UI buttons listeners setup
         playButton = findViewById(R.id.play_pause_button);
         playButton.setVisibility(View.GONE);
         playButton.setOnClickListener(v -> {
@@ -223,16 +225,13 @@ public class ArActivity extends AppCompatActivity {
                 if(augmentedImage.getTrackingState() == TrackingState.TRACKING &&
                         augmentedImage.getName().equals("Venere")) {
                     this.augmentedImage = augmentedImage;
-
                     detectionFlag = false;
                     enableUI();
                 }
             });
         }
 
-        /*
-         * Rotates the image displayed to look at the viewer at all times
-         */
+        // Rotates the image displayed to look at the viewer at all times
         if (imageNode != null) {
             Vector3 cameraPosition = arFragment.getArSceneView().getScene().getCamera().getWorldPosition();
             Vector3 imagePosition = imageNode.getWorldPosition();
@@ -270,10 +269,7 @@ public class ArActivity extends AppCompatActivity {
         ModelRenderable.builder()
                 .setSource(Objects.requireNonNull(arFragment.getContext()), uri)
                 .build()
-                .thenAccept(modelRenderable -> {
-                    guideNode = addNodeToScene(arFragment, anchor, modelRenderable);
-                    //guideNode.setLocalRotation(Quaternion.axisAngle(new Vector3(0.0f, 0.0f, 0.0f), 90f));
-                })
+                .thenAccept(modelRenderable -> guideNode = addNodeToScene(arFragment, anchor, modelRenderable))
                 .exceptionally(throwable -> {
                     Toast.makeText(getApplicationContext(), "Error: " + throwable.getMessage(), Toast.LENGTH_SHORT).show();
                     return null;
@@ -290,48 +286,68 @@ public class ArActivity extends AppCompatActivity {
      * @param bitmap the bitmap containing the image data
      */
     private void placeImageView(ArFragment arFragment, Anchor anchor, Bitmap bitmap) {
-        if(imageNode != null) {
-            arFragment.getArSceneView().getScene().removeChild(imageNode);
-            imageNode.setParent(null);
-            imageNode = null;
-        }
+
         ViewRenderable.builder()
                 .setView(arFragment.getContext(), R.layout.ar_layout)
                 .build()
                 .thenAccept(viewRenderable -> {
-                    ImageView imageView = (ImageView) viewRenderable.getView();
+                    imageRenderable = viewRenderable;
+                    ImageView imageView = (ImageView) imageRenderable.getView();
                     imageView.setImageBitmap(bitmap);
-                    viewRenderable.setShadowCaster(false);
-                    viewRenderable.setShadowReceiver(false);
-                    imageNode = addNodeToScene(arFragment, anchor, viewRenderable);
-                    Log.d(TAG, "ImageNode created");
-                    animateImageNode();
                 })
                 .exceptionally(throwable -> {
                     Toast.makeText(getApplicationContext(), "Error generating the image view: " + throwable.getMessage(), Toast.LENGTH_SHORT).show();
                     return null;
                 });
+
+        if(imageRenderable == null) {
+            return;
+        }
+
+        Pose imagePose = augmentedImage.getCenterPose();
+        Anchor startAnchor = Objects.requireNonNull(arFragment
+                .getArSceneView()
+                .getSession())
+                .createAnchor(imagePose);
+        AnchorNode startNode = new AnchorNode(startAnchor);
+        startNode.setParent(arFragment.getArSceneView().getScene());
+
+        imageNode = new Node();
+        imageNode.setParent(startNode);
+        imageNode.setRenderable(imageRenderable);
+
+        Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
+        endNode = new AnchorNode(arFragment.getArSceneView().getSession().createAnchor(cameraPose));
+        endNode.setParent(arFragment.getArSceneView().getScene());
+
+        ObjectAnimator objectAnimation = new ObjectAnimator();
+        objectAnimation.setAutoCancel(true);
+        objectAnimation.setTarget(imageNode);
+
+        // All the positions should be world positions
+        // The first position is the start, and the second is the end.
+        objectAnimation.setObjectValues(imageNode.getWorldPosition(), endNode.getWorldPosition());
+
+        // Use setWorldPosition to position andy.
+        objectAnimation.setPropertyName("worldPosition");
+
+        // The Vector3Evaluator is used to evaluator 2 vector3 and return the next
+        // vector3.  The default is to use lerp.
+        objectAnimation.setEvaluator(new Vector3Evaluator());
+        // This makes the animation linear (smooth and uniform).
+        objectAnimation.setInterpolator(new LinearInterpolator());
+        // Duration in ms of the animation.
+        objectAnimation.setDuration(500);
+        objectAnimation.start();
     }
 
 
     private void animateImageNode() {
-        Log.d(TAG, "Animation starting");
-        ObjectAnimator imageAnimator = new ObjectAnimator();
-        imageAnimator.setTarget(imageNode);
-        imageAnimator.setAutoCancel(true);
+        if(imageRenderable == null || imageNode == null) {
+            return;
+        }
 
-        Vector3 startPosition = imageNode.getWorldPosition();
-        Vector3 endPosition = new Vector3(startPosition.x + 100, startPosition.y + 100, startPosition.z + 100);
-        imageAnimator.setObjectValues(startPosition, endPosition);
 
-        imageAnimator.setPropertyName("localInterpolation");
-        imageAnimator.setEvaluator(new Vector3Evaluator());
-        imageAnimator.setInterpolator(new LinearInterpolator());
-        imageAnimator.setAutoCancel(true);
-
-        imageAnimator.setDuration(20000);
-        imageAnimator.start();
-        Log.d(TAG, "Animation dome");
     }
 
 
@@ -343,13 +359,12 @@ public class ArActivity extends AppCompatActivity {
      * @param renderable the renderable to add in the scene
      * @return the created node's reference
      */
-    private TransformableNode addNodeToScene(ArFragment arFragment, Anchor anchor, Renderable renderable) {
+    private Node addNodeToScene(ArFragment arFragment, Anchor anchor, Renderable renderable) {
         AnchorNode anchorNode = new AnchorNode(anchor);
-        TransformableNode node = new TransformableNode(arFragment.getTransformationSystem());
+        Node node = new Node();
         node.setRenderable(renderable);
         node.setParent(anchorNode);
         arFragment.getArSceneView().getScene().addChild(anchorNode);
-        node.select();
         return node;
     }
 
