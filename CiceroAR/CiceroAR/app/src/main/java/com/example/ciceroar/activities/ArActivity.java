@@ -14,7 +14,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
-import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
@@ -48,7 +47,6 @@ import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.Renderable;
 import com.google.ar.sceneform.rendering.ViewRenderable;
 import com.google.ar.sceneform.ux.ArFragment;
-import com.google.ar.sceneform.ux.TransformableNode;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -72,12 +70,10 @@ public class ArActivity extends AppCompatActivity {
     private ArFragment arFragment;
     private AugmentedImage augmentedImage;
     private Node guideNode;
-    ModelRenderable guideRenderable;
     private Node imageNode;
     private ViewRenderable imageRenderable;
     private TextToSpeechManager ttsManager;
 
-    private AnchorNode startNode, endNode;
     /**
      * Handler responsible to manage the message sent from the TTS thread when an utterance is started.
      * It places the image in the scene and interpolates it between
@@ -136,6 +132,7 @@ public class ArActivity extends AppCompatActivity {
         arFragment = (CustomArFragment) getSupportFragmentManager().findFragmentById(R.id.sceneform_fragment_2);
         assert arFragment != null;
         arFragment.getPlaneDiscoveryController().hide();
+        arFragment.getArSceneView().getPlaneRenderer().setVisible(false);
         arFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
         arFragment.setOnTapArPlaneListener((HitResult hitResult, Plane plane, MotionEvent motionEvent) -> {
             Anchor anchor = hitResult.createAnchor();
@@ -199,7 +196,11 @@ public class ArActivity extends AppCompatActivity {
         previousButton.setVisibility(View.GONE);
         previousButton.setOnClickListener(v -> {
             narrationIndex = (narrationIndex > 0 ? narrationIndex - 1 : 0);
-
+            if(imageNode != null) {
+                arFragment.getArSceneView().getScene().removeChild(imageNode);
+                imageNode.setParent(null);
+                imageNode = null;
+            }
             if(playingFlag) {
                 ttsManager.stop();
                 ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
@@ -286,70 +287,55 @@ public class ArActivity extends AppCompatActivity {
      * @param bitmap the bitmap containing the image data
      */
     private void placeImageView(ArFragment arFragment, Anchor anchor, Bitmap bitmap) {
+        if(imageNode != null) {
+            arFragment.getArSceneView().getScene().removeChild(imageNode);
+            imageNode.setParent(null);
+            imageNode = null;
+        }
 
         ViewRenderable.builder()
                 .setView(arFragment.getContext(), R.layout.ar_layout)
                 .build()
                 .thenAccept(viewRenderable -> {
                     imageRenderable = viewRenderable;
+                    imageRenderable.setShadowCaster(false);
+                    imageRenderable.setShadowReceiver(false);
                     ImageView imageView = (ImageView) imageRenderable.getView();
                     imageView.setImageBitmap(bitmap);
+
+                    Pose imagePose = augmentedImage.getCenterPose();
+                    imagePose = Pose.makeTranslation(0, -0.2f, 0).compose(imagePose);
+                    Anchor startAnchor = Objects.requireNonNull(arFragment
+                            .getArSceneView()
+                            .getSession())
+                            .createAnchor(imagePose);
+                    AnchorNode startNode = new AnchorNode(startAnchor);
+                    startNode.setParent(arFragment.getArSceneView().getScene());
+
+                    imageNode = new Node();
+                    imageNode.setParent(startNode);
+                    imageNode.setRenderable(imageRenderable);
+
+                    // Diminuire distanza di proiezione e sistemare la rimozione delle immagini
+                    Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
+                    AnchorNode endNode = new AnchorNode(arFragment.getArSceneView().getSession().createAnchor(cameraPose));
+                    endNode.setParent(arFragment.getArSceneView().getScene());
+
+                    ObjectAnimator objectAnimation = new ObjectAnimator();
+                    objectAnimation.setAutoCancel(true);
+                    objectAnimation.setTarget(imageNode);
+                    objectAnimation.setObjectValues(imageNode.getWorldPosition(), endNode.getWorldPosition());
+                    objectAnimation.setPropertyName("worldPosition");
+                    objectAnimation.setEvaluator(new Vector3Evaluator());
+                    objectAnimation.setInterpolator(new LinearInterpolator());
+                    objectAnimation.setDuration(20000);
+                    objectAnimation.start();
                 })
                 .exceptionally(throwable -> {
                     Toast.makeText(getApplicationContext(), "Error generating the image view: " + throwable.getMessage(), Toast.LENGTH_SHORT).show();
                     return null;
                 });
-
-        if(imageRenderable == null) {
-            return;
-        }
-
-        Pose imagePose = augmentedImage.getCenterPose();
-        Anchor startAnchor = Objects.requireNonNull(arFragment
-                .getArSceneView()
-                .getSession())
-                .createAnchor(imagePose);
-        AnchorNode startNode = new AnchorNode(startAnchor);
-        startNode.setParent(arFragment.getArSceneView().getScene());
-
-        imageNode = new Node();
-        imageNode.setParent(startNode);
-        imageNode.setRenderable(imageRenderable);
-
-        Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
-        endNode = new AnchorNode(arFragment.getArSceneView().getSession().createAnchor(cameraPose));
-        endNode.setParent(arFragment.getArSceneView().getScene());
-
-        ObjectAnimator objectAnimation = new ObjectAnimator();
-        objectAnimation.setAutoCancel(true);
-        objectAnimation.setTarget(imageNode);
-
-        // All the positions should be world positions
-        // The first position is the start, and the second is the end.
-        objectAnimation.setObjectValues(imageNode.getWorldPosition(), endNode.getWorldPosition());
-
-        // Use setWorldPosition to position andy.
-        objectAnimation.setPropertyName("worldPosition");
-
-        // The Vector3Evaluator is used to evaluator 2 vector3 and return the next
-        // vector3.  The default is to use lerp.
-        objectAnimation.setEvaluator(new Vector3Evaluator());
-        // This makes the animation linear (smooth and uniform).
-        objectAnimation.setInterpolator(new LinearInterpolator());
-        // Duration in ms of the animation.
-        objectAnimation.setDuration(500);
-        objectAnimation.start();
     }
-
-
-    private void animateImageNode() {
-        if(imageRenderable == null || imageNode == null) {
-            return;
-        }
-
-
-    }
-
 
     /**
      * Creates an anchor node, sets his parent and renderable, and places it into the scene
