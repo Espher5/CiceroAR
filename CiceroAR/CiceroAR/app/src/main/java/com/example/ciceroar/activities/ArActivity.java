@@ -59,6 +59,7 @@ public class ArActivity extends AppCompatActivity {
     private boolean detectionFlag = true;
     private boolean playingFlag = false;
 
+    private String title;
     private String[] descriptions;
     private Bitmap[] downloadResult;
     private int narrationIndex = 0;
@@ -72,6 +73,7 @@ public class ArActivity extends AppCompatActivity {
     private Node guideNode;
     private Node imageNode;
     private ViewRenderable imageRenderable;
+    private ObjectAnimator objectAnimator;
     private TextToSpeechManager ttsManager;
 
     /**
@@ -83,15 +85,8 @@ public class ArActivity extends AppCompatActivity {
         @Override
         public void handleMessage(@NonNull Message message) {
             Log.d(TAG, "onTtsStartHandler. Message: " + message);
-
-            Pose imagePose = augmentedImage.getCenterPose();
-            Anchor anchor = Objects.requireNonNull(arFragment
-                    .getArSceneView()
-                    .getSession())
-                    .createAnchor(imagePose);
-
             if (downloadResult[narrationIndex] != null) {
-                placeImageView(arFragment, anchor, downloadResult[narrationIndex]);
+                placeImageView(arFragment, downloadResult[narrationIndex]);
             }
         }
     };
@@ -99,6 +94,7 @@ public class ArActivity extends AppCompatActivity {
 
     /**
      * Handler responsible to manage the message sent from the TTS thread when an utterance is completed
+     * It performs a check on the next narration segments and if it is not the last one it initiates it
      */
     private final Handler onTtsDoneHandler = new Handler(Looper.getMainLooper()) {
         @Override
@@ -112,7 +108,7 @@ public class ArActivity extends AppCompatActivity {
                 Drawable icon = getDrawable(android.R.drawable.ic_media_play);
                 playButton.setImageDrawable(icon);
             } else {
-                ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
+                ttsManager.speak(descriptions[narrationIndex]);
             }
         }
     };
@@ -129,16 +125,15 @@ public class ArActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_ar);
 
-        arFragment = (CustomArFragment) getSupportFragmentManager().findFragmentById(R.id.sceneform_fragment_2);
+        arFragment = (CustomArFragment) getSupportFragmentManager().findFragmentById(R.id.sceneform_fragment);
         assert arFragment != null;
         arFragment.getPlaneDiscoveryController().hide();
-        arFragment.getArSceneView().getPlaneRenderer().setVisible(false);
         arFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
         arFragment.setOnTapArPlaneListener((HitResult hitResult, Plane plane, MotionEvent motionEvent) -> {
             Anchor anchor = hitResult.createAnchor();
             AnchorNode anchorNode = new AnchorNode(anchor);
             anchorNode.setParent(arFragment.getArSceneView().getScene());
-            placeGuideModel(arFragment, anchor, Uri.parse("female_head.sfb"));
+            placeGuideModel(arFragment, anchor, Uri.parse("guide.sfb"));
         });
 
         ttsManager = new TextToSpeechManager();
@@ -146,6 +141,7 @@ public class ArActivity extends AppCompatActivity {
         ttsManager.initTts(getApplicationContext(), progressListener);
 
         Intent intent = getIntent();
+        title = intent.getStringExtra("title");
         descriptions = intent.getStringArrayExtra("descriptions");
         assert descriptions!= null;
         downloadResult = SingletonAsyncDownloadTask.getDownloadResult();
@@ -165,7 +161,7 @@ public class ArActivity extends AppCompatActivity {
                 playButton.setImageDrawable(icon);
                 playingFlag = true;
 
-                ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
+                ttsManager.speak(descriptions[narrationIndex]);
             } else {
                 /*
                  * TTS is currently playing
@@ -175,20 +171,20 @@ public class ArActivity extends AppCompatActivity {
                 playButton.setImageDrawable(icon);
                 playingFlag = false;
                 ttsManager.stop();
+                if(objectAnimator != null) {
+                    objectAnimator.pause();
+                }
             }
         });
 
         nextButton = findViewById(R.id.next_button);
         nextButton.setVisibility(View.GONE);
         nextButton.setOnClickListener(v -> {
-            narrationIndex++;
-            if(narrationIndex >= descriptions.length) {
-                narrationIndex = descriptions.length - 1;
-            }
-
+            narrationIndex = (narrationIndex >= descriptions.length - 1 ? descriptions.length - 1 : narrationIndex + 1);
+            destroyImageView();
             if(playingFlag) {
                 ttsManager.stop();
-                ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
+                ttsManager.speak(descriptions[narrationIndex]);
             }
         });
 
@@ -196,21 +192,17 @@ public class ArActivity extends AppCompatActivity {
         previousButton.setVisibility(View.GONE);
         previousButton.setOnClickListener(v -> {
             narrationIndex = (narrationIndex > 0 ? narrationIndex - 1 : 0);
-            if(imageNode != null) {
-                arFragment.getArSceneView().getScene().removeChild(imageNode);
-                imageNode.setParent(null);
-                imageNode = null;
-            }
+            destroyImageView();
             if(playingFlag) {
                 ttsManager.stop();
-                ttsManager.speak(descriptions[narrationIndex], descriptions[narrationIndex]);
+                ttsManager.speak(descriptions[narrationIndex]);
             }
         });
     }
 
 
     /**
-     * Method called on every frame update  on the scene. It initially liiks for the image in the scene
+     * Method called on every camera frame update. It initially looks for the image in the scene
      * and when this is identified it proceeds to create the guide model and start the TTS narration
      * Finally it updates the rotation of the objects in the scene to face the camera in every instant
      *
@@ -224,7 +216,7 @@ public class ArActivity extends AppCompatActivity {
             Collection<AugmentedImage> augmentedImages = frame.getUpdatedTrackables(AugmentedImage.class);
             augmentedImages.forEach(augmentedImage -> {
                 if(augmentedImage.getTrackingState() == TrackingState.TRACKING &&
-                        augmentedImage.getName().equals("Venere")) {
+                        augmentedImage.getName().equals(title)) {
                     this.augmentedImage = augmentedImage;
                     detectionFlag = false;
                     enableUI();
@@ -241,6 +233,7 @@ public class ArActivity extends AppCompatActivity {
             imageNode.setWorldRotation(imageLookRotation);
         }
     }
+
 
 
     /**
@@ -283,15 +276,10 @@ public class ArActivity extends AppCompatActivity {
      * sets its image to the one received and places it into the scene
      *
      * @param arFragment the fragment
-     * @param anchor the anchor used to track the renderable
      * @param bitmap the bitmap containing the image data
      */
-    private void placeImageView(ArFragment arFragment, Anchor anchor, Bitmap bitmap) {
-        if(imageNode != null) {
-            arFragment.getArSceneView().getScene().removeChild(imageNode);
-            imageNode.setParent(null);
-            imageNode = null;
-        }
+    private void placeImageView(ArFragment arFragment, Bitmap bitmap) {
+        destroyImageView();
 
         ViewRenderable.builder()
                 .setView(arFragment.getContext(), R.layout.ar_layout)
@@ -303,39 +291,84 @@ public class ArActivity extends AppCompatActivity {
                     ImageView imageView = (ImageView) imageRenderable.getView();
                     imageView.setImageBitmap(bitmap);
 
+                    // Creates a pose in the center of the augmented image, shifts it down slightly,
+                    // places an anchor in that point and uses it to add the image node to the scene
                     Pose imagePose = augmentedImage.getCenterPose();
                     imagePose = Pose.makeTranslation(0, -0.2f, 0).compose(imagePose);
                     Anchor startAnchor = Objects.requireNonNull(arFragment
                             .getArSceneView()
                             .getSession())
                             .createAnchor(imagePose);
-                    AnchorNode startNode = new AnchorNode(startAnchor);
-                    startNode.setParent(arFragment.getArSceneView().getScene());
-
-                    imageNode = new Node();
-                    imageNode.setParent(startNode);
-                    imageNode.setRenderable(imageRenderable);
-
-                    // Diminuire distanza di proiezione e sistemare la rimozione delle immagini
-                    Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
-                    AnchorNode endNode = new AnchorNode(arFragment.getArSceneView().getSession().createAnchor(cameraPose));
-                    endNode.setParent(arFragment.getArSceneView().getScene());
-
-                    ObjectAnimator objectAnimation = new ObjectAnimator();
-                    objectAnimation.setAutoCancel(true);
-                    objectAnimation.setTarget(imageNode);
-                    objectAnimation.setObjectValues(imageNode.getWorldPosition(), endNode.getWorldPosition());
-                    objectAnimation.setPropertyName("worldPosition");
-                    objectAnimation.setEvaluator(new Vector3Evaluator());
-                    objectAnimation.setInterpolator(new LinearInterpolator());
-                    objectAnimation.setDuration(20000);
-                    objectAnimation.start();
+                    imageNode = addNodeToScene(arFragment, startAnchor, imageRenderable);
+                    animateImageNode(imageNode.getWorldPosition());
                 })
                 .exceptionally(throwable -> {
-                    Toast.makeText(getApplicationContext(), "Error generating the image view: " + throwable.getMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getApplicationContext(), "Error generating the image view: " +
+                            throwable.getMessage(), Toast.LENGTH_SHORT).show();
                     return null;
                 });
     }
+
+
+    /**
+     * Animates a previously generated image node in the scene by moving it forward
+     * towards the user camera.
+     *
+     * @param startPoint vector3 containing the image's initial position
+     */
+    private void animateImageNode(Vector3 startPoint) {
+        Vector3 endPoint = getCameraMiddlePoint(startPoint);
+
+        // Animates the image forward in the environment
+        objectAnimator = new ObjectAnimator();
+        objectAnimator.setAutoCancel(true);
+        objectAnimator.setTarget(imageNode);
+        objectAnimator.setObjectValues(startPoint, endPoint);
+        objectAnimator.setPropertyName("worldPosition");
+        objectAnimator.setEvaluator(new Vector3Evaluator());
+        objectAnimator.setInterpolator(new LinearInterpolator());
+        objectAnimator.setDuration(20000);
+        objectAnimator.start();
+    }
+
+    /**
+     * Calculates the middle point between the image node and the camera
+     * and returns it
+     *
+     * @param startPoint vector3 containing the image's initial position
+     * @return the endpoint for the animation transition
+     */
+    private Vector3 getCameraMiddlePoint(Vector3 startPoint) {
+        // Creates a pose in the current camera position and places and anchor in the middle point
+        // between the image node and the camera
+        Pose cameraPose = Objects.requireNonNull(arFragment.getArSceneView().getArFrame()).getCamera().getPose();
+        float distance = (float) Math.sqrt(
+                Math.pow((startPoint.x - cameraPose.tx()), 2) +
+                Math.pow((startPoint.y - cameraPose.ty()), 2) +
+                Math.pow((startPoint.z - cameraPose.tz()), 2)
+        ) / 2;
+        cameraPose = Pose.makeTranslation(0f, 0f, -distance).compose(cameraPose);
+        Anchor endAnchor = Objects.requireNonNull(arFragment
+                .getArSceneView()
+                .getSession())
+                .createAnchor(cameraPose);
+        AnchorNode endNode = new AnchorNode(endAnchor);
+        endNode.setParent(arFragment.getArSceneView().getScene());
+        return endNode.getWorldPosition();
+    }
+
+
+    /**
+     * Destroys a previously generated image node, after detaching it from its parent node
+     */
+    private void destroyImageView() {
+        if(imageNode != null) {
+            arFragment.getArSceneView().getScene().removeChild(imageNode);
+            imageNode.setParent(null);
+            imageNode = null;
+        }
+    }
+
 
     /**
      * Creates an anchor node, sets his parent and renderable, and places it into the scene
@@ -347,6 +380,7 @@ public class ArActivity extends AppCompatActivity {
      */
     private Node addNodeToScene(ArFragment arFragment, Anchor anchor, Renderable renderable) {
         AnchorNode anchorNode = new AnchorNode(anchor);
+        anchorNode.setParent(arFragment.getArSceneView().getScene());
         Node node = new Node();
         node.setRenderable(renderable);
         node.setParent(anchorNode);

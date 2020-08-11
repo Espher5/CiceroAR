@@ -1,4 +1,4 @@
-package com.example.ciceroar.activities;
+package com.example.guidemear.activities;
 
 
 import androidx.annotation.NonNull;
@@ -15,12 +15,12 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
-import com.example.ciceroar.network.SingletonAsyncDownloadTask;
-import com.example.ciceroar.painting.Painting;
-import com.example.ciceroar.R;
-import com.example.ciceroar.network.UploadAPI;
-import com.example.ciceroar.network.UploadHandler;
-import com.example.ciceroar.painting.PaintingDetail;
+import com.example.guidemear.network.SingletonAsyncDownloadTask;
+import com.example.guidemear.painting.Painting;
+import com.example.guidemear.R;
+import com.example.guidemear.network.UploadAPI;
+import com.example.guidemear.network.UploadHandler;
+import com.example.guidemear.painting.PaintingDetail;
 
 import java.io.File;
 import java.util.ArrayList;

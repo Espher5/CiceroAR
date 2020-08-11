@@ -1,4 +1,4 @@
-package com.example.ciceroar.activities;
+package com.example.guidemear.activities;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -20,7 +20,7 @@ import android.util.Log;
 import android.widget.Button;
 import android.widget.Toast;
 
-import com.example.ciceroar.R;
+import com.example.guidemear.R;
 
 import java.io.File;
 import java.io.IOException;
