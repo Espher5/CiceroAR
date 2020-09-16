@@ -20,6 +20,7 @@ import android.view.animation.LinearInterpolator;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.guidemear.CustomArFragment;
@@ -55,7 +56,7 @@ import java.util.Objects;
 
 
 public class ArActivity extends AppCompatActivity {
-    private static final String TAG = "Pippo";
+    private static final String TAG = "ArActivity";
     private boolean detectionFlag = true;
     private boolean playingFlag = false;
 
@@ -133,7 +134,7 @@ public class ArActivity extends AppCompatActivity {
             Anchor anchor = hitResult.createAnchor();
             AnchorNode anchorNode = new AnchorNode(anchor);
             anchorNode.setParent(arFragment.getArSceneView().getScene());
-            placeGuideModel(arFragment, anchor, Uri.parse("guide.sfb"));
+            placeGuideModel(arFragment, anchor, Uri.parse("female_head.sfb"));
         });
 
         ttsManager = new TextToSpeechManager();
@@ -142,6 +143,20 @@ public class ArActivity extends AppCompatActivity {
 
         Intent intent = getIntent();
         title = intent.getStringExtra("title");
+
+        // Temp style fix
+        assert title != null;
+        String titleTextString = title;
+        if(title.equals("Venere")) {
+            titleTextString = "La Nascita di Venere";
+        }
+        TextView titleText = findViewById(R.id.titleText);
+        titleText.setText(titleTextString);
+
+        String artist = intent.getStringExtra("artist");
+        TextView artistText = findViewById(R.id.artistText);
+        artistText.setText(artist);
+
         descriptions = intent.getStringArrayExtra("descriptions");
         assert descriptions!= null;
         downloadResult = SingletonAsyncDownloadTask.getDownloadResult();
