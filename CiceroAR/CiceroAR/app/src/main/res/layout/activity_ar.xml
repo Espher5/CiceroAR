@@ -7,10 +7,47 @@
     tools:context=".activities.ArActivity">
 
     <fragment
-        android:id="@+id/sceneform_fragment_2"
-        android:name="com.example.ciceroar.CustomArFragment"
+        android:id="@+id/sceneform_fragment"
+        android:name="com.example.guidemear.CustomArFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <View
+        android:id="@+id/view"
+        android:layout_width="444dp"
+        android:layout_height="70dp"
+        android:background="#B3000000"
+        app:layout_constraintBottom_toBottomOf="@+id/sceneform_fragment"
+        app:layout_constraintEnd_toEndOf="@+id/sceneform_fragment"
+        app:layout_constraintStart_toStartOf="@+id/sceneform_fragment"
+        app:layout_constraintTop_toTopOf="@+id/sceneform_fragment"
+        app:layout_constraintVertical_bias="0.0" />
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:textColor="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="@+id/view"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.223"
+        app:layout_constraintStart_toStartOf="@+id/view"
+        app:layout_constraintTop_toTopOf="@+id/sceneform_fragment"
+        app:layout_constraintVertical_bias="0.137" />
+
+    <TextView
+        android:id="@+id/artistText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:textColor="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="@+id/view"
+        app:layout_constraintEnd_toEndOf="@+id/view"
+        app:layout_constraintHorizontal_bias="0.201"
+        app:layout_constraintStart_toStartOf="@+id/view"
+        app:layout_constraintTop_toTopOf="@+id/sceneform_fragment"
+        app:layout_constraintVertical_bias="0.725" />
 
     <ImageButton
         android:id="@+id/play_pause_button"
@@ -18,11 +55,11 @@
         android:layout_height="wrap_content"
         android:contentDescription="@string/play_button_description"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="@+id/sceneform_fragment_2"
+        app:layout_constraintEnd_toEndOf="@+id/sceneform_fragment"
         app:layout_constraintHorizontal_bias="0.498"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.976"
+        app:layout_constraintVertical_bias="0.978"
         app:srcCompat="@android:drawable/ic_media_play" />
 
     <Button
@@ -31,12 +68,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/next_button"
-        app:layout_constraintBottom_toBottomOf="@+id/sceneform_fragment_2"
-        app:layout_constraintEnd_toEndOf="@+id/sceneform_fragment_2"
+        app:layout_constraintBottom_toBottomOf="@+id/sceneform_fragment"
+        app:layout_constraintEnd_toEndOf="@+id/sceneform_fragment"
         app:layout_constraintHorizontal_bias="0.9"
-        app:layout_constraintStart_toStartOf="@+id/sceneform_fragment_2"
-        app:layout_constraintTop_toTopOf="@+id/sceneform_fragment_2"
-        app:layout_constraintVertical_bias="0.976" />
+        app:layout_constraintStart_toStartOf="@+id/sceneform_fragment"
+        app:layout_constraintTop_toTopOf="@+id/sceneform_fragment"
+        app:layout_constraintVertical_bias="0.978" />
 
     <Button
         android:id="@+id/previous_button"
@@ -44,10 +81,11 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/previous_button"
-        app:layout_constraintBottom_toBottomOf="@+id/sceneform_fragment_2"
-        app:layout_constraintEnd_toEndOf="@+id/sceneform_fragment_2"
+        app:layout_constraintBottom_toBottomOf="@+id/sceneform_fragment"
+        app:layout_constraintEnd_toEndOf="@+id/sceneform_fragment"
         app:layout_constraintHorizontal_bias="0.096"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/sceneform_fragment_2"
-        app:layout_constraintVertical_bias="0.976" />
+        app:layout_constraintTop_toTopOf="@+id/sceneform_fragment"
+        app:layout_constraintVertical_bias="0.978" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
